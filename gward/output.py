@@ -4,10 +4,13 @@ from .models import RepoStatus
 
 
 def render(items: list[RepoStatus], elapsed: float) -> str:
+
     if not items:
         return ""
+
     width = max(len(s.name) for s in items)
     lines = []
+
     for s in items:
         if s.error:
             state, extra = "ERROR", s.error
@@ -16,5 +19,6 @@ def render(items: list[RepoStatus], elapsed: float) -> str:
             sync = f"↑{s.ahead} ↓{s.behind}" if s.ahead is not None else "-"
             extra = f"S{s.staged} M{s.modified} U{s.untracked}  {sync}"
         lines.append(f"{s.name:<{width}}  {s.branch or '-':<14} {state:<6} {extra}")
-    lines.append(f"\nПроверено за {elapsed:.2f} с")
+    lines.append(f"[DEBUG] Gward was launched {elapsed:.2f} seconds.")
+
     return "\n".join(lines)
