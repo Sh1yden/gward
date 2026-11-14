@@ -1,24 +1,84 @@
 """Output Module."""
 
+from rich import box
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+
 from .models import RepoStatus
 
 
-def render(items: list[RepoStatus], elapsed: float) -> str:
+def sync_cell(s: RepoStatus) -> str:
+    if s.ahead is None or s.behind is None:
+        return "—"
+    return f"↑{s.ahead} ↓{s.behind}"
 
-    if not items:
-        return ""
 
-    width = max(len(s.name) for s in items)
-    lines = []
+def sync_style(s: RepoStatus) -> str:
+    if s.ahead is None or s.behind is None:
+        return "dim"
+    if s.behind:
+        return "red"
+    if s.ahead:
+        return "green"
+    return "dim"
+
+
+def _count(n: int, style: str) -> Text:
+    return Text(str(n), style=style if n else "dim")
+
+
+def build_table(items: list[RepoStatus]) -> Table:
+    table = Table(
+        box=box.ROUNDED, header_style="bold cyan", title="gward", title_style="bold"
+    )
+    table.add_column("Репозиторий", style="bold")
+    table.add_column("Ветка", style="magenta")
+    table.add_column("Статус")
+    table.add_column("Staged", justify="right")
+    table.add_column("Modified", justify="right")
+    table.add_column("Untracked", justify="right")
+    table.add_column("Sync")
 
     for s in items:
         if s.error:
-            state, extra = "ERROR", s.error
-        else:
-            state = "dirty" if s.is_dirty else "clean"
-            sync = f"↑{s.ahead} ↓{s.behind}" if s.ahead is not None else "-"
-            extra = f"S{s.staged} M{s.modified} U{s.untracked}  {sync}"
-        lines.append(f"{s.name:<{width}}  {s.branch or '-':<14} {state:<6} {extra}")
-    lines.append(f"[DEBUG] Gward was launched {elapsed:.2f} seconds.")
+            table.add_row(
+                s.name,
+                s.branch or "-",
+                Text("error", style="bold red"),
+                "",
+                "",
+                "",
+                Text(s.error, style="red"),
+            )
+            continue
 
-    return "\n".join(lines)
+        state = (
+            Text("dirty", style="yellow")
+            if s.is_dirty
+            else Text("clean", style="green")
+        )
+        table.add_row(
+            s.name,
+            s.branch or "-",
+            state,
+            _count(s.staged, "green"),
+            _count(s.modified, "yellow"),
+            _count(s.untracked, "red"),
+            Text(sync_cell(s), style=sync_style(s)),
+        )
+    return table
+
+
+def print_report(
+    items: list[RepoStatus],
+    elapsed: float | None = None,
+    console: Console | None = None,
+) -> None:
+    console = console or Console()
+    if not items:
+        console.print("Git-репозиториев не найдено")
+        return
+    console.print(build_table(items))
+    if elapsed is not None:
+        console.print(f"[dim]Проверено за {elapsed:.2f} с[/dim]")

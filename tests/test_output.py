@@ -1,48 +1,72 @@
+import io
 from pathlib import Path
 
+from rich.console import Console
+
 from gward.models import RepoStatus
-from gward.output import render
+from gward.output import print_report, sync_cell
 
 
 def make(name, **kw):
     return RepoStatus(path=Path(name), name=name, **kw)
 
 
-def test_empty_returns_empty_string():
-    assert render([], 0.01) == ""
+def render(items, elapsed=None) -> str:
+    buf = io.StringIO()
+    console = Console(file=buf, width=120, color_system=None)
+    print_report(items, elapsed, console=console)
+    return buf.getvalue()
 
 
-def test_clean_row_contains_clean_and_zero_counts():
-    out = render([make("repo", branch="main", ahead=0, behind=0)], 0.01)
+# ---------- sync_cell: точные значения ----------
+
+
+def test_sync_cell_zero_zero():
+    assert sync_cell(make("r", ahead=0, behind=0)) == "↑0 ↓0"
+
+
+def test_sync_cell_values():
+    assert sync_cell(make("r", ahead=2, behind=3)) == "↑2 ↓3"
+
+
+def test_sync_cell_no_upstream_is_dash():
+    assert sync_cell(make("r", ahead=None, behind=None)) == "—"
+
+
+# ---------- render: что реально попадает в вывод ----------
+
+
+def test_empty_list_prints_message():
+    assert "не найдено" in render([])
+
+
+def test_clean_row():
+    out = render([make("repo", branch="main", ahead=0, behind=0)])
     assert "clean" in out
-    assert "S0 M0 U0" in out
     assert "↑0 ↓0" in out
 
 
-def test_dirty_row_shows_counts():
-    out = render([make("repo", branch="main", modified=3, untracked=1)], 0.01)
+def test_dirty_row():
+    out = render([make("repo", branch="main", modified=3, untracked=1)])
     assert "dirty" in out
-    assert "M3" in out and "U1" in out
 
 
 def test_error_row_shows_error_text():
-    out = render([make("repo", error="timeout")], 0.01)
-    assert "ERROR" in out
+    out = render([make("repo", error="timeout")])
+    assert "error" in out
     assert "timeout" in out
 
 
-def test_no_upstream_shows_dash_for_sync():
-    out = render([make("repo", branch="feature", ahead=None, behind=None)], 0.01)
-    assert "  -" in out or out.rstrip().endswith("-") or " - " in out
+def test_no_upstream_row_shows_dash():
+    out = render([make("repo", branch="feature", ahead=None, behind=None)])
+    assert "—" in out
 
 
-def test_column_widths_align_by_longest_name():
-    items = [make("a", branch="main"), make("longname", branch="main")]
-    lines = render(items, 0.0).splitlines()
-    # первая колонка выровнена: имя дополнено до ширины самого длинного
-    assert lines[0].index("main") == lines[1].index("main")
+def test_footer_shown_when_elapsed_given():
+    out = render([make("repo", branch="main")], elapsed=0.1234)
+    assert "Проверено за 0.12 с" in out
 
 
-def test_footer_contains_elapsed_time():
-    out = render([make("repo", branch="main")], 0.1234)
-    assert "0.12 с" in out
+def test_footer_hidden_without_elapsed():
+    out = render([make("repo", branch="main")], elapsed=None)
+    assert "Проверено" not in out
