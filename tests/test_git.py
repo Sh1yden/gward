@@ -1,4 +1,5 @@
 import asyncio
+import os
 import subprocess
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 from gward import git
 from gward.git import get_status, parse_status
 
-# ---------- Фикстуры: реальный формат `git status --porcelain=v2 --branch` ----------
+# ---------- Fixtures: real `git status --porcelain=v2 --branch` output ----------
 
 CLEAN = """\
 # branch.oid 1a2b3c4d5e6f
@@ -55,7 +56,7 @@ AHEAD_ONLY = """\
 """
 
 
-# ---------- parse_status: чистая функция, без git ----------
+# ---------- parse_status: pure function, no git involved ----------
 
 
 def test_parse_clean():
@@ -118,7 +119,7 @@ def test_parse_empty_output():
     assert not st.is_dirty
 
 
-# ---------- get_status: ошибки и таймаут через подмену run_git ----------
+# ---------- get_status: errors and timeout via monkeypatched run_git ----------
 
 
 def test_get_status_timeout(monkeypatch, tmp_path):
@@ -139,7 +140,28 @@ def test_get_status_nonzero_exit(monkeypatch, tmp_path):
     assert st.error == "fatal: not a git repository"
 
 
-# ---------- Интеграционные тесты на настоящих репозиториях ----------
+# ---------- fetch_repo: errors and timeout via monkeypatched run_git ----------
+
+
+def test_fetch_repo_timeout(monkeypatch, tmp_path):
+    async def fake_run_git(*args, **kwargs):
+        raise TimeoutError
+
+    monkeypatch.setattr(git, "run_git", fake_run_git)
+    st = asyncio.run(git.fetch_repo(tmp_path))
+    assert st.error == "fetch timeout"
+
+
+def test_fetch_repo_nonzero_exit(monkeypatch, tmp_path):
+    async def fake_run_git(*args, **kwargs):
+        return 128, "", "fatal: unable to access remote\n"
+
+    monkeypatch.setattr(git, "run_git", fake_run_git)
+    st = asyncio.run(git.fetch_repo(tmp_path))
+    assert st.error == "fatal: unable to access remote"
+
+
+# ---------- Integration tests on real repositories ----------
 
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "test",
@@ -151,8 +173,6 @@ GIT_ENV = {
 
 
 def run(cwd: Path, *args: str) -> None:
-    import os
-
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", *args], cwd=cwd, check=True, env=env, capture_output=True)
 
@@ -173,7 +193,7 @@ def repo(tmp_path):
 
 @pytest.fixture
 def remote_pair(tmp_path):
-    """Возвращает (локальный репозиторий, путь к bare-remote), уже с upstream."""
+    # Returns (local repository, bare remote path), with upstream already set
     remote = tmp_path / "remote.git"
     run(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
     local = make_repo(tmp_path / "local")
@@ -216,18 +236,18 @@ def test_real_ahead(remote_pair):
 
 def test_real_behind_needs_fetch(remote_pair, tmp_path):
     local, remote = remote_pair
-    # Второй клон пушит коммит в remote
+    # A second clone pushes a commit to the remote
     other = tmp_path / "other"
     run(tmp_path, "clone", "-q", str(remote), str(other))
     (other / "file.txt").write_text("from other\n")
     run(other, "commit", "-q", "-am", "remote change")
     run(other, "push", "-q")
 
-    # Без fetch локальная картина не знает о новом коммите
+    # Without fetch, the local view does not know about the new commit
     st = asyncio.run(get_status(local))
     assert st.behind == 0
 
-    # После fetch видим отставание
+    # After fetch, the lag is visible
     run(local, "fetch", "-q")
     st = asyncio.run(get_status(local))
     assert st.behind == 1
@@ -238,3 +258,24 @@ def test_real_no_upstream(repo):
     st = asyncio.run(get_status(repo))
     assert st.branch == "feature"
     assert st.ahead is None and st.behind is None
+
+
+def test_real_fetch_updates_behind(remote_pair, tmp_path):
+    local, remote = remote_pair
+    other = tmp_path / "other"
+    run(tmp_path, "clone", "-q", str(remote), str(other))
+    (other / "file.txt").write_text("from other\n")
+    run(other, "commit", "-q", "-am", "remote change")
+    run(other, "push", "-q")
+
+    # fetch_repo should both fetch and return a fresh status
+    st = asyncio.run(git.fetch_repo(local))
+    assert st.error is None
+    assert st.behind == 1
+
+
+def test_real_fetch_unreachable_remote_reports_error(repo):
+    # Point origin at a path that does not exist, so fetch genuinely fails
+    run(repo, "remote", "add", "origin", str(repo.parent / "missing.git"))
+    st = asyncio.run(git.fetch_repo(repo))
+    assert st.error is not None
