@@ -9,6 +9,7 @@ from .models import RepoStatus
 
 
 def sync_cell(s: RepoStatus) -> str:
+    # No upstream configured: ahead/behind are unknown
     if s.ahead is None or s.behind is None:
         return "—"
     return f"↑{s.ahead} ↓{s.behind}"
@@ -18,13 +19,14 @@ def sync_style(s: RepoStatus) -> str:
     if s.ahead is None or s.behind is None:
         return "dim"
     if s.behind:
-        return "red"
+        return "red"  # remote has commits we don't have
     if s.ahead:
-        return "green"
+        return "green"  # local commits not pushed yet
     return "dim"
 
 
 def _count(n: int, style: str) -> Text:
+    # Zero counts are dimmed so non-zero values stand out
     return Text(str(n), style=style if n else "dim")
 
 
@@ -32,9 +34,9 @@ def build_table(items: list[RepoStatus]) -> Table:
     table = Table(
         box=box.ROUNDED, header_style="bold cyan", title="gward", title_style="bold"
     )
-    table.add_column("Репозиторий", style="bold")
-    table.add_column("Ветка", style="magenta")
-    table.add_column("Статус")
+    table.add_column("Repository", style="bold")
+    table.add_column("Branch", style="magenta")
+    table.add_column("Status")
     table.add_column("Staged", justify="right")
     table.add_column("Modified", justify="right")
     table.add_column("Untracked", justify="right")
@@ -77,8 +79,8 @@ def print_report(
 ) -> None:
     console = console or Console()
     if not items:
-        console.print("Git-репозиториев не найдено")
+        console.print("No Git repositories found")
         return
     console.print(build_table(items))
     if elapsed is not None:
-        console.print(f"[dim]Проверено за {elapsed:.2f} с[/dim]")
+        console.print(f"[dim]Checked in {elapsed:.2f} s[/dim]")

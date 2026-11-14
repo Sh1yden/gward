@@ -18,7 +18,7 @@ def render(items, elapsed=None) -> str:
     return buf.getvalue()
 
 
-# ---------- sync_cell: точные значения ----------
+# ---------- sync_cell: exact values ----------
 
 
 def test_sync_cell_zero_zero():
@@ -33,11 +33,11 @@ def test_sync_cell_no_upstream_is_dash():
     assert sync_cell(make("r", ahead=None, behind=None)) == "—"
 
 
-# ---------- render: что реально попадает в вывод ----------
+# ---------- render: what actually ends up in the output ----------
 
 
 def test_empty_list_prints_message():
-    assert "не найдено" in render([])
+    assert "No Git repositories found" in render([])
 
 
 def test_clean_row():
@@ -64,9 +64,9 @@ def test_no_upstream_row_shows_dash():
 
 def test_footer_shown_when_elapsed_given():
     out = render([make("repo", branch="main")], elapsed=0.1234)
-    assert "Проверено за 0.12 с" in out
+    assert "Checked in 0.12 s" in out
 
 
 def test_footer_hidden_without_elapsed():
     out = render([make("repo", branch="main")], elapsed=None)
-    assert "Проверено" not in out
+    assert "Checked in" not in out
