@@ -3,13 +3,16 @@
 from pathlib import Path
 
 
-class Dir:
-    def __init__(self) -> None:
-        pass
+def find_repos(root: Path) -> list[Path]:
+    """..."""
 
-    def is_repo(self, path: Path) -> bool:
-        """Check if have .git path(and repo) in path."""
-        return (path / ".git").is_dir()
+    if (root / ".git").exists():
+        return [root]
 
-    async def get_curr_dir(self) -> Path:
-        return Path.cwd()
+    return [
+        child
+        for child in sorted(root.iterdir())
+        if child.is_dir()
+        and not child.name.startswith(".")
+        and (child / ".git").exists()
+    ]
