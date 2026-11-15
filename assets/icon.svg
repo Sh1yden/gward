@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <!-- Smooth Angular Radar Sweep Gradient -->
+    <linearGradient id="radarSweepGrad" x1="204.18" y1="75.28" x2="386.6" y2="120.76" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8B76AF" stop-opacity="0" />
+      <stop offset="45%" stop-color="#9E87C8" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#B9A4E0" stop-opacity="0.58" />
+    </linearGradient>
+
+    <!-- Leading Beam Glow -->
+    <filter id="beamGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Subtle Shadow for Foreground Git Graph -->
+    <filter id="graphShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#111116" flood-opacity="0.65" />
+    </filter>
+
+    <!-- Squircle Clip Path -->
+    <clipPath id="squircleClip">
+      <rect x="20" y="20" width="472" height="472" rx="112" ry="112" />
+    </clipPath>
+  </defs>
+
+  <!-- Base Dark Squircle Container -->
+  <rect x="20" y="20" width="472" height="472" rx="112" ry="112" fill="#1E1E26" />
+
+  <g clip-path="url(#squircleClip)">
+    <!-- Radar Scan Sector -->
+    <path d="M 256.0 256.0 L 204.18 75.28 A 188.0 188.0 0 0 1 386.6 120.76 Z" fill="url(#radarSweepGrad)" />
+
+    <!-- Concentric Radar Grid Rings -->
+    <g stroke="#8B76AF" fill="none">
+      <circle cx="256.0" cy="256.0" r="188" stroke-width="7.5" stroke-opacity="0.92" />
+      <circle cx="256.0" cy="256.0" r="140" stroke-width="6.5" stroke-opacity="0.80" />
+      <circle cx="256.0" cy="256.0" r="94" stroke-width="6" stroke-opacity="0.72" />
+      <circle cx="256.0" cy="256.0" r="48" stroke-width="5.5" stroke-opacity="0.68" />
+    </g>
+
+    <!-- Secondary Horizontal Radar Axis -->
+    <line x1="256.0" y1="256.0" x2="350.0" y2="256.0" stroke="#8B76AF" stroke-width="6" stroke-linecap="round" stroke-opacity="0.65" />
+
+    <!-- Leading Radar Scanner Beam -->
+    <line x1="256.0" y1="256.0" x2="386.6" y2="120.76" stroke="#B9A4E0" stroke-width="7" stroke-linecap="round" filter="url(#beamGlow)" />
+
+    <!-- Detected Repository Nodes on Radar Rings -->
+    <circle cx="299.26" cy="122.85" r="13.5" fill="#D5D0B5" />
+    <circle cx="151.96" cy="162.32" r="13.5" fill="#D5D0B5" />
+    <circle cx="117.36" cy="275.48" r="13.5" fill="#8B76AF" />
+    <circle cx="206.19" cy="335.72" r="13.5" fill="#8B76AF" />
+    <circle cx="341.87" cy="217.77" r="13.5" fill="#8B76AF" />
+    <circle cx="389.15" cy="212.74" r="13.5" fill="#8B76AF" />
+
+    <!-- Foreground Cream-Beige Git Branch Graph -->
+    <g filter="url(#graphShadow)">
+      <!-- Connector from Radar Center to Root Commit -->
+      <line x1="256.0" y1="256.0" x2="282" y2="272" stroke="#D5D0B5" stroke-width="8.5" stroke-linecap="round" />
+
+      <!-- Main Branch Line -->
+      <path d="M 282 272 L 302 314 L 288 382" stroke="#D5D0B5" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+      <!-- Secondary Branch Fork -->
+      <path d="M 302 314 L 362 316" stroke="#D5D0B5" stroke-width="9.5" stroke-linecap="round" fill="none" />
+
+      <!-- Commit Nodes -->
+      <circle cx="282" cy="272" r="17.5" fill="#D5D0B5" />
+      <circle cx="288" cy="382" r="15.5" fill="#D5D0B5" />
+      <circle cx="362" cy="316" r="15.5" fill="#D5D0B5" />
+    </g>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from gward.filter import priority, sort_statuses
+from gward.filter import only_attention, priority, sort_statuses
 from gward.models import RepoStatus
 
 
@@ -17,7 +17,7 @@ def test_priority_order():
 
 
 def test_no_upstream_is_not_unsynced():
-    # ahead/behind = None не должны считаться расхождением
+    # ahead/behind = None must not count as a divergence
     assert priority(make("x", ahead=None, behind=None)) == 3
 
 
@@ -35,3 +35,20 @@ def test_sort_puts_problems_first_then_alphabetical():
 
 def test_sort_empty_list():
     assert sort_statuses([]) == []
+
+
+def test_only_attention_hides_clean_repos():
+    items = [
+        make("clean", ahead=0, behind=0),
+        make("dirty", modified=1),
+        make("unsynced", behind=2),
+        make("broken", error="boom"),
+        make("no-upstream", ahead=None, behind=None),
+    ]
+    names = {s.name for s in only_attention(items)}
+    assert names == {"dirty", "unsynced", "broken"}
+
+
+def test_only_attention_all_clean_returns_empty():
+    items = [make("a", ahead=0, behind=0), make("b", ahead=0, behind=0)]
+    assert only_attention(items) == []
