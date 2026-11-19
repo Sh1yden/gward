@@ -8,7 +8,7 @@ import pytest
 from gward import git
 from gward.git import get_status, parse_status
 
-# ---------- Fixtures: real `git status --porcelain=v2 --branch` output ----------
+# ---------- Fixtures: real `git status --porcelain=v2 --branch` ----------
 
 CLEAN = """\
 # branch.oid 1a2b3c4d5e6f
@@ -119,7 +119,7 @@ def test_parse_empty_output():
     assert not st.is_dirty
 
 
-# ---------- get_status: errors and timeout via monkeypatched run_git ----------
+# ---------- get_status: errors via monkeypatched run_git ----------
 
 
 def test_get_status_timeout(monkeypatch, tmp_path):
@@ -140,7 +140,35 @@ def test_get_status_nonzero_exit(monkeypatch, tmp_path):
     assert st.error == "fatal: not a git repository"
 
 
-# ---------- fetch_repo: errors and timeout via monkeypatched run_git ----------
+def test_get_status_missing_git(monkeypatch, tmp_path):
+    async def fake_run_git(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(git, "run_git", fake_run_git)
+    st = asyncio.run(get_status(tmp_path))
+    assert st.error == "git not found"
+
+
+def test_fetch_repo_missing_git(monkeypatch, tmp_path):
+    async def fake_run_git(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(git, "run_git", fake_run_git)
+    st = asyncio.run(git.fetch_repo(tmp_path))
+    assert st.error == "git not found"
+
+
+def test_git_env_drops_inherited_repository_context(monkeypatch):
+    monkeypatch.setenv("GIT_DIR", "/tmp/other/.git")
+    monkeypatch.setenv("GIT_WORK_TREE", "/tmp/other")
+    env = git._git_env()
+    assert "GIT_DIR" not in env
+    assert "GIT_WORK_TREE" not in env
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env["GIT_OPTIONAL_LOCKS"] == "0"
+
+
+# ---------- fetch_repo: errors via monkeypatched run_git ----------
 
 
 def test_fetch_repo_timeout(monkeypatch, tmp_path):
@@ -174,7 +202,13 @@ GIT_ENV = {
 
 def run(cwd: Path, *args: str) -> None:
     env = {**os.environ, **GIT_ENV}
-    subprocess.run(["git", *args], cwd=cwd, check=True, env=env, capture_output=True)
+    subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        env=env,
+        capture_output=True,
+    )
 
 
 def make_repo(path: Path) -> Path:
@@ -207,6 +241,12 @@ def test_real_clean_repo(repo):
     assert st.error is None
     assert st.branch == "main"
     assert not st.is_dirty
+
+
+def test_run_git_timeout_raises(repo):
+    # The hung process must be killed and the timeout surfaced to the caller
+    with pytest.raises(TimeoutError):
+        asyncio.run(git.run_git(repo, "status", timeout=0.001))
 
 
 def test_real_untracked_and_modified(repo):

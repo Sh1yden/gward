@@ -1,14 +1,24 @@
 [project]
 name = "gward"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "Fast status overview for local Git repositories"
 readme = "README.md"
 authors = [{ name = "Sh1yden" }]
+license = "MIT"
 requires-python = ">=3.13"
+keywords = ["git", "cli", "status", "repositories"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+]
 dependencies = [
     "rich>=15.0.0",
     "typer>=0.29.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/Sh1yden/gward"
 
 [project.scripts]
 gward = "gward.main:main"
@@ -22,5 +32,21 @@ module-root = ""
 
 [dependency-groups]
 dev = [
+    "mypy>=2.4.1",
     "pytest>=9.2.0",
+    "ruff>=0.17.5",
 ]
+
+[tool.ruff]
+line-length = 79
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC"]
+# Typer declares options in argument defaults; ASYNC109 prefers
+# asyncio.timeout over a timeout parameter, which is not applicable here.
+ignore = ["B008", "ASYNC109"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["gward"]

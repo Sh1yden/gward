@@ -18,6 +18,7 @@ If you have dozens of local projects, it's easy to forget an unpushed commit or 
 - **Output:** `rich`
 - **Package manager and build:** `uv` (`uv_build`)
 - **Tests:** `pytest`
+- **Checks:** `ruff`, `mypy`
 
 ## 🧭 Table of contents
 
@@ -81,6 +82,7 @@ For development, see the [«Project setup»](#-project-setup) section.
 - **`gward -d`** — show only repositories that need attention: with errors, local changes, or diverged from the remote.
 - **`gward --debug`** — add the elapsed time at the bottom.
 - **`gward fetch`** — run `git fetch --prune` in all repositories first, then show the status. Requires network.
+- **`gward -C ~/projects fetch`** — the same for another folder. Global options (`-C`, `-d`, `--debug`) go **before** the subcommand.
 
 Table columns:
 
@@ -93,10 +95,13 @@ Table columns:
 
 - **Sync shows `↓0`, but there are new commits on GitHub.** Without `fetch`, git doesn't know about commits on the server: it compares against saved remote-tracking refs, and those go stale. Run `gward fetch`.
 - **Sync shows `—`.** The branch has no upstream configured. Add one with `git push -u origin <branch>`, and the column will start showing `↑` and `↓`.
-- **A row is marked `error`.** Git could not read the status or complete the fetch. The error text is shown in the Sync column. Common causes: a broken repository, an unreachable remote, a timeout.
+- **A row is marked `error`.** Git could not read the status or complete the fetch. The first line of the error is shown in the Sync column, and the full text is printed below the table. Common causes: a broken repository, an unreachable remote, a timeout.
+- **`Invalid value for '--dir' / '-C'` is printed.** The folder does not exist or is a file. Check the path; `gward` does not run the check until the folder is found.
 - **"No Git repositories found" is printed.** `gward` looks for repositories in the folder itself and in its direct subfolders. Hidden folders (starting with a dot) are skipped. If you run `gward` inside a repository, only that repository is shown.
 - **Why is `fetch` a separate command and not a flag?** A regular check should be instant and never touch the network. Fetch takes seconds and depends on the network, so it runs only when requested explicitly.
+- **Which remote does `fetch` update?** The one configured for the current branch (its upstream, usually `origin`). `git fetch --prune` without arguments does not iterate over every remote. This is deliberate: an unreachable second remote should not mark the repository as broken. Use `git fetch --all` manually for all remotes.
 - **A clean repository disappeared from the list.** The `-d` flag hides all clean repositories, including those without an upstream.
+- **"All repositories are clean" is printed.** The `-d` filter ran and found no problems: every repository is clean and in sync. "No Git repositories found" remains only for a folder with no repositories at all.
 - **Timeouts.** A regular check waits up to 10 seconds per repository, fetch up to 60. A repository that doesn't respond in time is marked `error`, and the rest keep being checked.
 
 ## 💻 Developer sections
@@ -130,6 +135,13 @@ Tests live in the [`tests`](tests) directory. The `git status` parser is checked
 uv run pytest -v
 ```
 
+Linter and type checks (configured in `pyproject.toml`):
+
+```shell
+uv run ruff check
+uv run mypy
+```
+
 ## 🗄 Project structure
 
 - `gward/` — the application package.
@@ -143,10 +155,11 @@ uv run pytest -v
 - `pyproject.toml` and `uv.lock` — project configuration and dependencies.
 - [`README.md`](README.md) — the Russian version; [`README.en.md`](README.en.md) — this file.
 - [`LICENSE`](LICENSE) — project license.
+- `.github/workflows/ci.yml` — CI: `ruff`, `mypy` and `pytest` on every push and pull request.
 
 ## ☑ Roadmap / Planned
 
-This project is distributed under the MIT license. Details in the [LICENSE](LICENSE) file.
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## 📄 License
 

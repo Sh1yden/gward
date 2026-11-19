@@ -35,3 +35,15 @@ def test_collect_returns_one_result_per_repo(tmp_path):
     repos = [tmp_path / f"r{i}" for i in range(5)]
     results = asyncio.run(collect(repos, fake_worker))
     assert len(results) == 5
+
+
+def test_collect_isolates_worker_failure(tmp_path):
+    # One failing worker must not abort the report for other repositories
+    async def flaky_worker(repo):
+        if repo.name == "broken":
+            raise RuntimeError("boom")
+        return RepoStatus(path=repo, name=repo.name)
+
+    repos = [tmp_path / "ok", tmp_path / "broken"]
+    results = asyncio.run(collect(repos, flaky_worker))
+    assert [s.error for s in results] == [None, "boom"]

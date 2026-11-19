@@ -13,7 +13,12 @@ def test_priority_order():
     dirty = make("d", modified=1)
     unsynced = make("u", ahead=1, behind=0)
     clean = make("c", ahead=0, behind=0)
-    assert priority(error) < priority(dirty) < priority(unsynced) < priority(clean)
+    assert (
+        priority(error)
+        < priority(dirty)
+        < priority(unsynced)
+        < priority(clean)
+    )
 
 
 def test_no_upstream_is_not_unsynced():

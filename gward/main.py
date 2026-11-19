@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -15,6 +16,16 @@ from .output import print_report
 
 # Maximum number of concurrent git processes
 MAX_PARALLEL = 8
+
+
+@dataclass(frozen=True)
+class Options:
+    """Options shared by the default command and subcommands."""
+
+    directory: Path
+    debug: bool
+    dirty: bool
+
 
 app = typer.Typer(
     add_completion=False,
@@ -33,7 +44,12 @@ async def collect(
 
     async def bounded(repo: Path) -> RepoStatus:
         async with sem:
-            return await worker(repo)
+            try:
+                return await worker(repo)
+            except Exception as exc:
+                # One broken repository must not abort the whole report
+                message = str(exc).strip() or type(exc).__name__
+                return RepoStatus(path=repo, name=repo.name, error=message)
 
     return await asyncio.gather(*(bounded(repo) for repo in repos))
 
@@ -41,11 +57,9 @@ async def collect(
 async def gather_statuses(
     root: Path,
     worker: Callable[[Path], Awaitable[RepoStatus]] = get_status,
-    dirty_only: bool = False,
 ) -> list[RepoStatus]:
     # Find repositories under root, run the worker on each, then sort
-    statuses = sort_statuses(await collect(find_repos(root), worker))
-    return only_attention(statuses) if dirty_only else statuses
+    return sort_statuses(await collect(find_repos(root), worker))
 
 
 def _report(
@@ -56,41 +70,63 @@ def _report(
 ) -> None:
     # Shared pipeline for the default command and for fetch
     start = time.perf_counter()
-    statuses = asyncio.run(
-        gather_statuses(directory.resolve(), worker=worker, dirty_only=dirty)
-    )
+    try:
+        statuses = asyncio.run(
+            gather_statuses(directory.resolve(), worker=worker)
+        )
+    except OSError as exc:
+        # Unreadable folders should not produce a traceback
+        raise typer.BadParameter(str(exc), param_hint="--dir") from exc
+    visible = only_attention(statuses) if dirty else statuses
+    if statuses and not visible:
+        empty_message = "All repositories are clean"
+    else:
+        empty_message = "No Git repositories found"
     elapsed = time.perf_counter() - start if debug else None
-    print_report(statuses, elapsed)
+    print_report(visible, elapsed, empty_message=empty_message)
 
 
 @app.callback()
 def default(
     ctx: typer.Context,
     directory: Path = typer.Option(
-        Path("."), "--dir", "-C", help="Folder containing repositories"
+        Path("."),
+        "--dir",
+        "-C",
+        help="Folder containing repositories",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
     ),
     debug: bool = typer.Option(False, "--debug", help="Show elapsed time"),
     dirty: bool = typer.Option(
-        False, "--dirty", "-d", help="Show only repositories that need attention"
+        False,
+        "--dirty",
+        "-d",
+        help="Show only repositories that need attention",
     ),
 ) -> None:
-    # Plain `gward` runs a quick local status check; subcommands take over otherwise
+    # Global options are resolved once and shared with subcommands through
+    # the Click context, so `gward -C PATH fetch` works as expected.
+    ctx.obj = Options(directory=directory, debug=debug, dirty=dirty)
+    # Plain `gward` runs a quick local status check
     if ctx.invoked_subcommand is None:
         _report(directory, debug, dirty, get_status)
 
 
 @app.command()
-def fetch(
-    directory: Path = typer.Option(
-        Path("."), "--dir", "-C", help="Folder containing repositories"
-    ),
-    debug: bool = typer.Option(False, "--debug", help="Show elapsed time"),
-    dirty: bool = typer.Option(
-        False, "--dirty", "-d", help="Show only repositories that need attention"
-    ),
-) -> None:
+def fetch(ctx: typer.Context) -> None:
+    """Fetch remotes, then show the status."""
+
     # Network operation: fetch each repository, then read its fresh status
-    _report(directory, debug, dirty, fetch_repo)
+    options: Options = ctx.obj
+    _report(
+        options.directory,
+        options.debug,
+        options.dirty,
+        fetch_repo,
+    )
 
 
 def main() -> None:

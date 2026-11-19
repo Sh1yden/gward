@@ -4,7 +4,13 @@ from pathlib import Path
 from rich.console import Console
 
 from gward.models import RepoStatus
-from gward.output import print_report, sync_cell
+from gward.output import (
+    error_details,
+    format_error,
+    print_report,
+    sync_cell,
+    sync_style,
+)
 
 
 def make(name, **kw):
@@ -33,11 +39,46 @@ def test_sync_cell_no_upstream_is_dash():
     assert sync_cell(make("r", ahead=None, behind=None)) == "—"
 
 
+def test_sync_style_marks_directions():
+    assert sync_style(make("r", ahead=None, behind=None)) == "dim"
+    assert sync_style(make("r", ahead=0, behind=2)) == "red"
+    assert sync_style(make("r", ahead=1, behind=0)) == "green"
+    assert sync_style(make("r", ahead=0, behind=0)) == "dim"
+
+
+# ---------- error text compaction ----------
+
+
+def test_format_error_keeps_first_line():
+    assert format_error("fatal: first\nsecond line") == "fatal: first"
+
+
+def test_format_error_truncates_long_line():
+    text = "fatal: " + "x" * 60
+    result = format_error(text, limit=20)
+    assert len(result) == 20
+    assert result.endswith("…")
+
+
+def test_error_details_only_when_cell_is_shortened():
+    short = [make("r", error="timeout")]
+    assert error_details(short) == []
+    long = [make("r", error="x" * 50)]
+    assert error_details(long) == [("r", "x" * 50)]
+
+
 # ---------- render: what actually ends up in the output ----------
 
 
 def test_empty_list_prints_message():
     assert "No Git repositories found" in render([])
+
+
+def test_empty_list_prints_custom_message():
+    buf = io.StringIO()
+    console = Console(file=buf, width=120, color_system=None)
+    print_report([], console=console, empty_message="All clean")
+    assert "All clean" in buf.getvalue()
 
 
 def test_clean_row():
@@ -55,6 +96,15 @@ def test_error_row_shows_error_text():
     out = render([make("repo", error="timeout")])
     assert "error" in out
     assert "timeout" in out
+    assert "Errors:" not in out
+
+
+def test_multiline_error_is_compacted_and_printed_in_full():
+    error = "fatal: unable to access remote\nhint: check the URL"
+    out = render([make("repo", error=error)])
+    assert "fatal: unable to access" in out
+    assert "hint: check the URL" in out
+    assert "Errors:" in out
 
 
 def test_no_upstream_row_shows_dash():

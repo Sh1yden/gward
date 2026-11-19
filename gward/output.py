@@ -7,6 +7,40 @@ from rich.text import Text
 
 from .models import RepoStatus
 
+# Error text in the table is kept on one line; the full message is
+# printed below the table when it does not fit the cell.
+ERROR_LIMIT = 30
+
+
+def _first_line(message: str) -> str:
+    for line in message.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def format_error(message: str, limit: int = ERROR_LIMIT) -> str:
+    # Compact one-line representation of a possibly multi-line git error
+    line = _first_line(message)
+    if len(line) > limit:
+        return line[: limit - 1].rstrip() + "…"
+    return line
+
+
+def error_details(
+    items: list[RepoStatus], limit: int = ERROR_LIMIT
+) -> list[tuple[str, str]]:
+    # Full message is worth printing when the cell had to shorten it
+    details: list[tuple[str, str]] = []
+    for s in items:
+        if not s.error:
+            continue
+        message = s.error.strip()
+        shortened = format_error(message, limit) != message
+        if len(s.error.splitlines()) > 1 or shortened:
+            details.append((s.name, message))
+    return details
+
 
 def sync_cell(s: RepoStatus) -> str:
     # No upstream configured: ahead/behind are unknown
@@ -32,7 +66,10 @@ def _count(n: int, style: str) -> Text:
 
 def build_table(items: list[RepoStatus]) -> Table:
     table = Table(
-        box=box.ROUNDED, header_style="bold cyan", title="gward", title_style="bold"
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        title="gward",
+        title_style="bold",
     )
     table.add_column("Repository", style="bold")
     table.add_column("Branch", style="magenta")
@@ -40,7 +77,7 @@ def build_table(items: list[RepoStatus]) -> Table:
     table.add_column("Staged", justify="right")
     table.add_column("Modified", justify="right")
     table.add_column("Untracked", justify="right")
-    table.add_column("Sync")
+    table.add_column("Sync", max_width=ERROR_LIMIT + 2)
 
     for s in items:
         if s.error:
@@ -51,7 +88,12 @@ def build_table(items: list[RepoStatus]) -> Table:
                 "",
                 "",
                 "",
-                Text(s.error, style="red"),
+                Text(
+                    format_error(s.error),
+                    style="red",
+                    no_wrap=True,
+                    overflow="ellipsis",
+                ),
             )
             continue
 
@@ -76,11 +118,20 @@ def print_report(
     items: list[RepoStatus],
     elapsed: float | None = None,
     console: Console | None = None,
+    empty_message: str = "No Git repositories found",
 ) -> None:
     console = console or Console()
     if not items:
-        console.print("No Git repositories found")
+        console.print(empty_message)
         return
     console.print(build_table(items))
+    details = error_details(items)
+    if details:
+        console.print()
+        console.print(Text("Errors:", style="bold"))
+        for name, message in details:
+            console.print(
+                Text.assemble((f"{name}: ", "bold"), (message, "red"))
+            )
     if elapsed is not None:
         console.print(f"[dim]Checked in {elapsed:.2f} s[/dim]")
