@@ -1,6 +1,7 @@
 import asyncio
+from pathlib import Path
 
-from gward.main import collect, gather_statuses
+from gward.main import collect, compute_exit_code, gather_statuses
 from gward.models import RepoStatus
 
 
@@ -47,3 +48,47 @@ def test_collect_isolates_worker_failure(tmp_path):
     repos = [tmp_path / "ok", tmp_path / "broken"]
     results = asyncio.run(collect(repos, flaky_worker))
     assert [s.error for s in results] == [None, "boom"]
+
+
+def test_gather_statuses_respects_depth(tmp_path):
+    nested = tmp_path / "group" / "nested"
+    nested.mkdir(parents=True)
+    (nested / ".git").mkdir()
+
+    assert asyncio.run(gather_statuses(tmp_path, worker=fake_worker)) == []
+    result = asyncio.run(
+        gather_statuses(tmp_path, worker=fake_worker, depth=2)
+    )
+    assert [s.name for s in result] == ["nested"]
+
+
+# ---------- exit codes ----------
+
+
+def make_status(name, **kw):
+    return RepoStatus(path=Path(name), name=name, **kw)
+
+
+def test_compute_exit_code_clean():
+    assert compute_exit_code([make_status("r")]) == 0
+
+
+def test_compute_exit_code_no_upstream_is_clean():
+    status = make_status("r", ahead=None, behind=None)
+    assert compute_exit_code([status]) == 0
+
+
+def test_compute_exit_code_dirty():
+    assert compute_exit_code([make_status("r", modified=1)]) == 1
+
+
+def test_compute_exit_code_unsynced():
+    assert compute_exit_code([make_status("r", ahead=1, behind=0)]) == 1
+
+
+def test_compute_exit_code_error_wins():
+    statuses = [
+        make_status("dirty", modified=1),
+        make_status("broken", error="boom"),
+    ]
+    assert compute_exit_code(statuses) == 2

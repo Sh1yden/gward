@@ -1,5 +1,7 @@
 """Output Module."""
 
+import json
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -40,6 +42,34 @@ def error_details(
         if len(s.error.splitlines()) > 1 or shortened:
             details.append((s.name, message))
     return details
+
+
+def repo_payload(s: RepoStatus) -> dict[str, object]:
+    # Stable machine-readable shape for one repository
+    if s.error:
+        status = "error"
+    elif s.is_dirty:
+        status = "dirty"
+    else:
+        status = "clean"
+    return {
+        "name": s.name,
+        "path": str(s.path),
+        "branch": s.branch,
+        "status": status,
+        "staged": s.staged,
+        "modified": s.modified,
+        "untracked": s.untracked,
+        "ahead": s.ahead,
+        "behind": s.behind,
+        "error": s.error,
+    }
+
+
+def print_json(items: list[RepoStatus]) -> None:
+    # Machine-readable output must stay free of Rich formatting
+    payload = [repo_payload(s) for s in items]
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def sync_cell(s: RepoStatus) -> str:

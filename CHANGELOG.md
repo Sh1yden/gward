@@ -9,14 +9,42 @@
 
 ### Планируется
 
-- [ ] Вывод в JSON (`--json`) для скриптов.
-- [ ] Опция `--exit-code` для использования в скриптах и CI.
 - [ ] `gward pull` / `gward sync`: обновление веток только через
   `fast-forward`, с пропуском репозиториев с локальными правками.
 - [ ] Пакетный коммит и push с обязательным списком репозиториев
   перед выполнением.
-- [ ] Автодополнение для Bash, Zsh и Fish.
-- [ ] Глубина поиска (`--depth`) для вложенных групп проектов.
+
+## [0.3.0] - 2026-11-19
+
+### Добавлено
+
+- Вывод в JSON (`--json`): массив репозиториев с полями `name`,
+  `path`, `branch`, `status`, `staged`, `modified`, `untracked`,
+  `ahead`, `behind`, `error`. Работает для `gward`, `gward fetch`
+  и вместе с `-d`.
+- Опция `--exit-code`: `0` — всё чисто, `1` — локальные правки
+  или рассинхронизация, `2` — ошибки git. Без флага код
+  возврата прежний, всегда `0`.
+- Опция `--depth` для поиска во вложенных группах проектов.
+  По умолчанию `1` — корень и прямые подпапки.
+- Автодополнение для Bash, Zsh и Fish (`--install-completion`,
+  `--show-completion`).
+- Тесты для JSON, кодов возврата, глубины поиска и completion.
+- Smoke-тест установленного wheel в CI: проверка CLI, JSON,
+  `--depth`, completion и кодов `0/1/2`.
+
+### Изменено
+
+- CI разделён на независимые джобы `lint`, `typecheck`, `tests`
+  и `smoke`, чтобы падение было видно отдельно.
+- CI запускается на теги `v*` и вручную через `workflow_dispatch`,
+  а не на каждый push в `main` и pull request.
+- `find_repos` принимает глубину поиска; внутрь найденного
+  репозитория поиск не спускается, скрытые папки и симлинки
+  пропускаются.
+- В `--json` время из `--debug` печатается в stderr, чтобы stdout
+  оставался чистым JSON.
+- Обновлены `README.md`, `README.en.md` и `CHANGELOG.md`.
 
 ## [0.2.0] - 2026-11-18
 
@@ -111,6 +139,7 @@
   `git fetch` без remote возвращает код 0. Тест переписан
   на реальный сбой с недоступным remote.
 
-[Unreleased]: https://github.com/Sh1yden/gward/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Sh1yden/gward/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Sh1yden/gward/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Sh1yden/gward/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Sh1yden/gward/releases/tag/v0.1.0

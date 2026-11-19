@@ -1,6 +1,6 @@
 [project]
 name = "gward"
-version = "0.2.0"
+version = "0.3.0"
 description = "Fast status overview for local Git repositories"
 readme = "README.md"
 authors = [{ name = "Sh1yden" }]

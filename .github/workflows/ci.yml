@@ -2,24 +2,132 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 jobs:
-  checks:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
+          python-version: "3.13"
           enable-cache: true
-      - name: Install Python
-        run: uv python install 3.13
       - name: Install dependencies
         run: uv sync --locked
       - name: Lint
         run: uv run ruff check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
       - name: Type check
         run: uv run mypy
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
       - name: Tests
         run: uv run pytest -q
+
+  smoke:
+    needs: [lint, typecheck, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Build package
+        run: uv build --out-dir "$RUNNER_TEMP/dist"
+      - name: Install wheel into clean environment
+        run: |
+          uv venv "$RUNNER_TEMP/gward-venv"
+          uv pip install --python "$RUNNER_TEMP/gward-venv/bin/python" "$RUNNER_TEMP"/dist/gward-*.whl
+      - name: Smoke test
+        run: |
+          set -eu
+          bin="$RUNNER_TEMP/gward-venv/bin/gward"
+          work="$RUNNER_TEMP/repos"
+          rm -rf "$work"
+          mkdir -p "$work/clean" "$work/dirty"
+          git -C "$work/clean" init -q -b main
+          git -C "$work/dirty" init -q -b main
+          echo change > "$work/dirty/file.txt"
+
+          "$bin" --help
+          out=$("$bin" -C "$work")
+          echo "$out"
+          grep -q 'clean' <<<"$out"
+          grep -q 'dirty' <<<"$out"
+
+          out=$("$bin" -d -C "$work/clean")
+          echo "$out"
+          grep -q 'All repositories are clean' <<<"$out"
+
+          set +e
+          "$bin" -C "$work/missing" >/dev/null 2>&1
+          code=$?
+          set -e
+          test "$code" -eq 2
+      - name: JSON, depth and completion
+        run: |
+          set -eu
+          bin="$RUNNER_TEMP/gward-venv/bin/gward"
+          work="$RUNNER_TEMP/repos"
+
+          "$bin" --json -C "$work" | python3 -m json.tool >/dev/null
+
+          mkdir -p "$work/group/nested"
+          git -C "$work/group/nested" init -q -b main
+          out=$("$bin" --depth 2 -C "$work")
+          echo "$out"
+          grep -q 'nested' <<<"$out"
+
+          if "$bin" -C "$work" | grep -q 'nested'; then
+            echo "default depth must not find nested repositories" >&2
+            exit 1
+          fi
+
+          "$bin" --show-completion | grep -q 'complete'
+      - name: Exit codes
+        run: |
+          set -eu
+          bin="$RUNNER_TEMP/gward-venv/bin/gward"
+          work="$RUNNER_TEMP/repos"
+          err_root="$RUNNER_TEMP/errors"
+
+          "$bin" --exit-code -d -C "$work/clean" >/dev/null
+
+          set +e
+          "$bin" --exit-code -C "$work" >/dev/null
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+          rm -rf "$err_root"
+          mkdir -p "$err_root/broken"
+          printf 'gitdir: /nonexistent\n' > "$err_root/broken/.git"
+
+          set +e
+          "$bin" --exit-code -C "$err_root" >/dev/null
+          code=$?
+          set -e
+          test "$code" -eq 2
